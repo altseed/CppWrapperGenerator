@@ -4,7 +4,7 @@ using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 
-namespace CSharpWrapperGenerator
+namespace CppWrapperGenerator
 {
 	class EnumDef
 	{
@@ -37,6 +37,7 @@ namespace CSharpWrapperGenerator
 	class MethodDef
 	{
 		public bool IsStatic = false;
+        public bool IsPublic = false;
 		public string Name = string.Empty;
 		public string Brief = string.Empty;
 		public string ReturnType = string.Empty;

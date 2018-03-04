@@ -4,15 +4,27 @@ using System.IO;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
-/*
-namespace CSharpWrapperGenerator
+
+namespace CppWrapperGenerator
 {
 	class Exporter
 	{
 		private Settings settings;
 		private ParseResult doxygen;
-		
-		public Exporter(Settings settings, ParseResult doxygen)
+
+        List<string> dll_headerText = new List<string>();
+        List<string> dll_cppText = new List<string>();
+        List<string> lib_headerText = new List<string>();
+        List<string> lib_cppText = new List<string>();
+
+        int dll_h_indent = 0;
+        int dll_cpp_indent = 0;
+        int lib_h_indent = 0;
+        int lib_cpp_indent = 0;
+
+        string dllClassName = "WrapperDLL";
+
+        public Exporter(Settings settings, ParseResult doxygen)
 		{
 			this.settings = settings;
 			this.doxygen = doxygen;
@@ -20,242 +32,288 @@ namespace CSharpWrapperGenerator
 
 		public void Export()
 		{
-			List<string> codes = new List<string>();
+            AddDLLH("#pragma once");
+            AddDLLH("");
 
-			codes.Add("using System;");
-			codes.Add("namespace asd {");
+            AddDLLH("class " + dllClassName + " {");
+            AddDLLH("public:");
 
-			foreach(var e in doxygen.EnumDefs.Join(swig.EnumDefs, x => x.Name, x => x.Name, (o, i) => o))
-			{
-				codes.Add(BuildEnum(e));
-			}
+            AddDLLCPP("#include \"asd.WrapperDLL.h\"");
+            AddDLLCPP("");
 
-			AddClasses(codes);
+            AddLIBH("#pragma once");
+            AddLIBH("");
+            AddLIBH("asd {");
+            AddLIBH("");
 
-			codes.Add("}");
+            AddLIBH("void InitializeWrapper();");
+            AddLIBH("void TerminateWrapper();");
+            AddLIBH("");
 
-			File.WriteAllLines(settings.ExportFilePath, codes.ToArray());
-		}
+            AddLIBCPP("#include \"asd.WrapperLib.h\"");
+            AddLIBCPP("");
+            AddLIBCPP("asd {");
+            AddLIBCPP("");
+            AddLIBCPP("static " + dllClassName + "* dll = nullptr;");
+            AddLIBCPP("");
+            AddLIBCPP("void InitializeWrapper() {");
+            AddLIBCPP("\tdll = (" + dllClassName + "*)Create" + dllClassName + "();");
+            AddLIBCPP("};");
+            AddLIBCPP("");
+            AddLIBCPP("void TerminateWrapper() {");
+            AddLIBCPP("\tDelete" + dllClassName + "(dll);");
+            AddLIBCPP("};");
 
-		private void AddClasses(List<string> codes)
-		{
-			List<ClassDef> classes = swig.ClassDefs.ToList();
-			Dictionary<string, string> coreNameToEngineName = new Dictionary<string, string>();
 
-			classes.RemoveAll(x => settings.ClassBlackList.Contains(x.Name));
+            PushDLLHIndent();
 
-			var beRemoved = new List<string>();
-			foreach(var item in classes.Where(x => x.Name.EndsWith("_Imp")))
-			{
-				var newName = item.Name.Replace("_Imp", "");
-				beRemoved.Add(newName);
-				coreNameToEngineName[item.Name] = newName;
-			}
-			classes.RemoveAll(x => beRemoved.Contains(x.Name));
+            foreach (var c in doxygen.ClassDefs)
+            {
+                var dllFuncPrefix = c.Name + "_";
 
-			foreach(var item in classes.Where(x => x.Name.StartsWith("Core")))
-			{
-				coreNameToEngineName[item.Name] = item.Name.Replace("Core", "");
-			}
+                AddLIBH("class " + c.Name + " {");
+                PushLIBHIndent();
+                AddLIBH("void* self = nullptr;");
+                AddLIBH("public:");
 
-			foreach(var c in classes)
-			{
-				var name = coreNameToEngineName.ContainsKey(c.Name) ? coreNameToEngineName[c.Name] : c.Name;
-				var doxygenClass = doxygen.ClassDefs.FirstOrDefault(_2 => _2.Name == name);
-				if (doxygenClass != null)
-				{
-					c.Brief = doxygenClass.Brief;
-					c.Note = doxygenClass.Note;
-				}
+                foreach (var m in c.Methods)
+                {
+                    if (m.IsStatic) continue;
+                    if (!m.IsPublic) continue;
 
-				if(settings.ListOfClassWhoseCoreIsPrivate.Contains(c.Name))
-				{
-					c.CoreIsPrivate = true;
-				}
+                    var isConstract = string.IsNullOrEmpty(m.ReturnType) && !m.Name.Contains("~");
+                    var isDestruct = string.IsNullOrEmpty(m.ReturnType) && m.Name.Contains("~");
 
-				foreach(var method in c.Methods)
-				{
-					var doxygenMethod = doxygenClass != null ? doxygenClass.Methods.FirstOrDefault(_3 => _3.Name == method.Name) : null;
-					if (doxygenMethod != null)
-					{
-						method.Brief = doxygenMethod.Brief;
-						method.BriefOfReturn = doxygenMethod.BriefOfReturn;
-						method.Note = doxygenMethod.Note;
-					}
+                    var methodName = m.Name;
+                    var returnType = m.ReturnType;
+                    var libParameters = m.Parameters.ToArray().ToList();
+                    var dllParameters = m.Parameters.ToArray().ToList();
 
-					foreach(var parameter in method.Parameters)
-					{
-						var doxygenParameter = doxygenMethod != null ? doxygenMethod.Parameters.FirstOrDefault(_4 => _4.Name == parameter.Name) : null;
-						parameter.Brief = doxygenParameter != null ? doxygenParameter.Brief : "";
+                    if (isConstract)
+                    {
+                        methodName = "Construct";
+                        returnType = "void *";
                     }
-				}
+                    else if (isDestruct)
+                    {
+                        methodName = "Destruct";
+                        returnType = "void";
+
+                        ParameterDef def = new ParameterDef();
+                        def.Type = "void *";
+                        def.Name = "self";
+                        dllParameters.Insert(0, def);
+                    }
+                    else
+                    {
+                        ParameterDef def = new ParameterDef();
+                        def.Type = "void *";
+                        def.Name = "self";
+                        dllParameters.Insert(0, def);
+                    }
+
+                    var dllFuncName = dllFuncPrefix + methodName;
+
+                    // dll
+                    var dllFuncArg = "(" + string.Join(",", dllParameters.Select(_ => _.Type + " " + _.Name).ToArray()) + ")";
+
+                    // dll header
+                    AddDLLH("virtual " + returnType + " " + dllFuncName + dllFuncArg + ";");
+
+                    // dll cpp
+                    AddDLLCPP(returnType + " " + dllClassName + "::" + dllFuncName + dllFuncArg + "{");
+
+                    PushDLLCppIndent();
+
+                    if(isConstract)
+                    {
+                        AddDLLCPP("return " + c.Name + "(" + string.Join(",", libParameters.Select(_ => _.Name).ToArray()) + ");");
+                    }
+                    else if(isDestruct)
+                    {
+                        AddDLLCPP("auto self_ = (" + c.Name + "*)self;");
+                        AddDLLCPP("delete self_;");
+                    }
+                    else
+                    {
+                        AddDLLCPP("auto self_ = (" + c.Name + "*)self;");
+
+                        if (returnType == "void")
+                        {
+                            AddDLLCPP("self_->" + methodName + "(" + string.Join(",", libParameters.Select(_ => _.Name).ToArray()) + ");");
+                        }
+                        else
+                        {
+                            AddDLLCPP("return self_->" + methodName + "(" + string.Join(",", libParameters.Select(_ => _.Name).ToArray()) + ");");
+                        }
+                    }
+
+                    PopDLLCppIndent();
+
+                    AddDLLCPP("};");
+                    AddDLLCPP("");
+
+                    // lib
+                    var libFuncArg = "(" + string.Join(",", libParameters.Select(_ => _.Type + " " + _.Name).ToArray()) + ")";
+
+                    // lib header
+                    if (isConstract)
+                    {
+                        AddLIBH(c.Name + libFuncArg + ";");
+                    }
+                    else if (isDestruct)
+                    {
+                        AddLIBH("virtual ~" + c.Name + libFuncArg + ";");
+                    }
+                    else
+                    {
+                        AddLIBH(returnType + " " + methodName + libFuncArg + ";");
+                    }
+
+                    // lib cpp
+                    if (isConstract)
+                    {
+                        AddLIBCPP(c.Name + "::" + c.Name + libFuncArg + "{");
+                        PushLIBCppIndent();
+                        {
+                            AddLIBCPP("self = dll->" + dllFuncName + "(" + string.Join(",", dllParameters.Select(_ => _.Name).ToArray()) + ");");
+                        }
+                        PopLIBCppIndent();
+                        AddLIBCPP("};");
+                    }
+                    else if (isDestruct)
+                    {
+                        AddLIBCPP(c.Name + "::~" + c.Name + libFuncArg + "{");
+                        PushLIBCppIndent();
+                        {
+                            AddLIBCPP("dll->" + dllFuncName + "(" + string.Join(",", dllParameters.Select(_ => _.Name).ToArray()) + ");");
+                        }
+                        PopLIBCppIndent();
+                        AddLIBCPP("};");
+                    }
+                    else
+                    {
+                        AddLIBCPP(returnType + " " + c.Name + "::" + methodName + libFuncArg + "{");
+                        PushLIBCppIndent();
+                        {
+                            if (returnType == "void")
+                            {
+                                AddLIBCPP("dll->" + dllFuncName + "(" + string.Join(",", dllParameters.Select(_ => _.Name).ToArray()) + ");");
+                            }
+                            else
+                            {
+                                AddLIBCPP("return dll->" + dllFuncName + "(" + string.Join(",", dllParameters.Select(_ => _.Name).ToArray()) + ");");
+                            }
+                        }
+                        PopLIBCppIndent();
+                        AddLIBCPP("};");
+                    }
+                    
+                    AddLIBCPP("");
+                }
+
+                PopLIBHIndent();
+                AddLIBH("};");
+                AddLIBH("");
             }
 
-			foreach(var c in classes)
-			{
-				codes.Add(BuildClass(c, coreNameToEngineName));
-			}
-		}
+            PopDLLHIndent();
 
-		private string BuildClass(ClassDef c, Dictionary<string, string> coreNameToEngineName)
-		{
-			c.Methods.RemoveAll(method => settings.MethodBlackList.Any(x =>
-			{
-				var patterns = x.Split('.');
-				if(patterns[0] != "*" && patterns[0] != c.Name)
-				{
-					return false;
-				}
-				if(patterns[1] != method.Name)
-				{
-					return false;
-				}
-				return true;
-			}));
+            AddDLLH("}");
 
-			c.Methods.RemoveAll(method => swig.ClassDefs.Any(x => method.ReturnType == x.Name));
+            AddDLLH("extern \"C\" {");
+            AddDLLH("void* Create" + dllClassName + "();");
+            AddDLLH("void Delete" + dllClassName + "(void* o);");
+            AddDLLH("}");
 
-			foreach(var method in c.Methods)
-			{
-				method.ReturnIsEnum = swig.EnumDefs.Any(x => x.Name == method.ReturnType);
-				if(coreNameToEngineName.ContainsKey(method.ReturnType))
-				{
-					method.ReturnType = coreNameToEngineName[method.ReturnType];
-				}
-				foreach(var parameter in method.Parameters)
-				{
-					parameter.IsEnum = swig.EnumDefs.Any(x => x.Name == parameter.Type);
-					parameter.IsWrappingObject = swig.ClassDefs.Any(x => x.Name == parameter.Type);
-					parameter.CoreType = parameter.Type;
-					if(coreNameToEngineName.ContainsKey(parameter.Type))
-					{
-						parameter.Type = coreNameToEngineName[parameter.Type];
-					}
-				}
-			}
+            AddDLLCPP("void* Create" + dllClassName + "() {");
+            PushDLLCppIndent();
+            AddDLLCPP("return new " + dllClassName + "();");
+            PopDLLCppIndent();
+            AddDLLCPP("}");
+            AddDLLCPP("");
 
-			SetProperties(c);
+            AddDLLCPP("void Delete" + dllClassName + "(void* o) {");
+            PushDLLCppIndent();
+            AddDLLCPP("auto o_ = (" + dllClassName + "*)o;");
+            AddDLLCPP("delete o_;");
+            PopDLLCppIndent();
+            AddDLLCPP("}");
 
-			var name = coreNameToEngineName.ContainsKey(c.Name) ? coreNameToEngineName[c.Name] : c.Name;
-			var template = new Templates.ClassGen(name, c);
-			return template.TransformText();
-		}
 
-		private void SetProperties(ClassDef c)
-		{
-			var properties = new Dictionary<string, PropertyDef>();
+            AddLIBH("}");
+            AddLIBCPP("}");
 
-			var getters = c.Methods.Where(x => x.Name.StartsWith("Get"))
-				.Where(x => x.Parameters.Count == 0)
-				.Where(x => x.ReturnType != "void")
-				.ToArray();
 
-			var setters = c.Methods.Where(x => x.Name.StartsWith("Set"))
-				.Where(x => x.Parameters.Count == 1)
-				.Where(x => x.ReturnType == "void")
-				.ToArray();
+            System.IO.File.WriteAllLines("dll.h", dll_headerText.ToArray());
+            System.IO.File.WriteAllLines("dll.cpp", dll_cppText.ToArray());
+            System.IO.File.WriteAllLines("lib.h", lib_headerText.ToArray());
+            System.IO.File.WriteAllLines("lib.cpp", lib_cppText.ToArray());
+        }
 
-			c.Methods.RemoveAll(getters.Contains);
-			c.Methods.RemoveAll(setters.Contains);
+        void AddDLLH(string str)
+        {
+            string s = string.Empty;
+            for(int i = 0; i < dll_h_indent; i++)
+            {
+                s += "\t";
+            }
 
-			foreach(var item in getters)
-			{
-				var name = item.Name.Replace("Get", "");
-				var start取得する = item.Brief.IndexOf("を取得する");
-				properties[name] = new PropertyDef
-				{
-					Type = item.ReturnType,
-					Name = name,
-					HaveGetter = true,
-					Brief = start取得する != -1 ? item.Brief.Remove(start取得する) : "",
-					IsEnum = item.ReturnIsEnum,
-				};
-			}
+            s += str;
 
-			foreach(var item in setters)
-			{
-				var name = item.Name.Replace("Set", "");
-				var type = item.Parameters[0].Type;
-				if(swig.ClassDefs.Any(x => x.Name == type))
-				{
-					continue;
-				}
+            dll_headerText.Add(s);
+        }
 
-				if(properties.ContainsKey(name))
-				{
-					if(properties[name].Type == type)
-					{
-						properties[name].HaveSetter = true;
-					}
-					else
-					{
-						throw new Exception("Getter/Setterの不一致");
-					}
-				}
-				else
-				{
-					var start設定する = item.Brief.IndexOf("を設定する");
-					properties[name] = new PropertyDef
-					{
-						Type = type,
-						Name = name,
-						HaveSetter = true,
-						Brief = start設定する != -1 ? item.Brief.Remove(start設定する) : "",
-						IsEnum = item.Parameters[0].IsEnum,
-					};
-				}
-				properties[name].IsRefForSet = item.Parameters[0].IsRef;
-			}
+        void AddDLLCPP(string str)
+        {
+            string s = string.Empty;
+            for (int i = 0; i < dll_cpp_indent; i++)
+            {
+                s += "\t";
+            }
 
-			foreach(var property in properties.Values)
-			{
-				if(property.Brief == string.Empty)
-				{
-					continue;
-				}
+            s += str;
 
-				var verbs = new List<string>();
-				if(property.HaveGetter)
-				{
-					verbs.Add("取得");
-				}
-				if(property.HaveSetter)
-				{
-					verbs.Add("設定");
-				}
-				property.Brief += "を" + string.Join("または", verbs) + "する。";
-			}
+            dll_cppText.Add(s);
+        }
 
-			c.Properties = new List<PropertyDef>(properties.Values);
-		}
+        void AddLIBH(string str)
+        {
+            string s = string.Empty;
+            for (int i = 0; i < lib_h_indent; i++)
+            {
+                s += "\t";
+            }
 
-		private string BuildEnum(EnumDef enumDef)
-		{
-			var template = new Templates.EnumGen(enumDef);
-			return template.TransformText();
-		}
+            s += str;
 
-		void ExportEnum(List<string> sb, DoxygenParser doxygen, CSharpParser csharp)
-		{
-			// Csharpのswigに存在しているenumのみ出力
-			foreach(var e in doxygen.EnumDefs.Where(_ => csharp.Enumdefs.Any(__ => __.Name == _.Name)))
-			{
-				sb.Add(@"/// <summary>");
-				sb.Add(string.Format(@"/// {0}", e.Brief));
-				sb.Add(@"/// </summary>");
-				sb.Add(@"public enum " + e.Name + " : int {");
+            lib_headerText.Add(s);
+        }
 
-				foreach(var em in e.Members)
-				{
-					sb.Add(@"/// <summary>");
-					sb.Add(string.Format(@"/// {0}", em.Brief));
-					sb.Add(@"/// </summary>");
-					sb.Add(string.Format(@"{0} = asd.swig.{1}.{2},", em.Name, e.Name, em.Name));
-				}
+        void AddLIBCPP(string str)
+        {
+            string s = string.Empty;
+            for (int i = 0; i < lib_cpp_indent; i++)
+            {
+                s += "\t";
+            }
 
-				sb.Add(@"}");
-			}
-		}
-	}
+            s += str;
+
+            lib_cppText.Add(s);
+        }
+
+        void PushDLLHIndent() { dll_h_indent++; }
+        void PopDLLHIndent() { dll_h_indent--; }
+
+        void PushDLLCppIndent() { dll_cpp_indent++; }
+        void PopDLLCppIndent() { dll_cpp_indent--; }
+
+        void PushLIBHIndent() { lib_h_indent++; }
+        void PopLIBHIndent() { lib_h_indent--; }
+
+        void PushLIBCppIndent() { lib_cpp_indent++; }
+        void PopLIBCppIndent() { lib_cpp_indent--; }
+
+    }
 }
-*/

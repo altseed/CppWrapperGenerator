@@ -5,7 +5,7 @@ using System.Runtime.Serialization;
 using System.Text;
 using System.Threading.Tasks;
 
-namespace CSharpWrapperGenerator
+namespace CppWrapperGenerator
 {
 	[DataContract]
 	class Settings

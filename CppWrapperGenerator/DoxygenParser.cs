@@ -5,7 +5,7 @@ using System.Text;
 using System.Threading.Tasks;
 using System.Xml.Linq;
 
-namespace CSharpWrapperGenerator
+namespace CppWrapperGenerator
 {
 
 	/// <summary>
@@ -127,6 +127,8 @@ namespace CSharpWrapperGenerator
 		{
 			var methodDef = new MethodDef();
 			methodDef.Name = funcNode.Element("name").Value;
+
+            methodDef.IsPublic = funcNode.Attribute("prot").Value == "public";
 
             var typeNode = funcNode.Element("type");
             if(typeNode != null)
