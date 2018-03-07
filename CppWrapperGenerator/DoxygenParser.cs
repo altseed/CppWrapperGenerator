@@ -131,9 +131,9 @@ namespace CppWrapperGenerator
             methodDef.IsPublic = funcNode.Attribute("prot").Value == "public";
 
             var typeNode = funcNode.Element("type");
-            if(typeNode != null)
+            if (typeNode != null)
             {
-                methodDef.ReturnType = typeNode.Value.ToString();
+                methodDef.ReturnType.Parse(typeNode.Value);
             }
 
             var briefNode = funcNode.Element("briefdescription").Element("para");
@@ -196,7 +196,7 @@ namespace CppWrapperGenerator
 
             if(arg != null)
             {
-                def.Type = arg.Item1;
+                def.Type.Parse(arg.Item1);
             }
 
             return def;

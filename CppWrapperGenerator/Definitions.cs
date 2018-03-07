@@ -6,6 +6,56 @@ using System.Threading.Tasks;
 
 namespace CppWrapperGenerator
 {
+    class BuildIn
+    {
+        public static string[] PrimitiveType =
+        {
+            "int",
+            "int32_t",
+            "void",
+            "float",
+            "bool",
+        };
+    }
+
+    class TypeDef
+    {
+        public string Name = string.Empty;
+        public bool IsSharedPtr = false;
+        public bool IsPrimitiveType = false;
+
+        public void Parse(string original)
+        {
+            if(original.Contains("std::shared_ptr"))
+            {
+                IsSharedPtr = true;
+                Name = original.Replace("std::shared_ptr", "").Replace("<", "").Replace(">", "").Replace(" ", "");
+            }
+            else
+            {
+                Name = original;
+            }
+
+            foreach(var type in BuildIn.PrimitiveType)
+            {
+                if (original.Contains(type))
+                {
+                    IsPrimitiveType = true;
+                }
+            }
+        }
+
+        public override string ToString()
+        {
+            if(IsSharedPtr)
+            {
+                return string.Format("std::shared_ptr<{0}>", Name);
+            }
+
+            return Name;
+        }
+    }
+
 	class EnumDef
 	{
 		public string Name = string.Empty;
@@ -40,7 +90,7 @@ namespace CppWrapperGenerator
         public bool IsPublic = false;
 		public string Name = string.Empty;
 		public string Brief = string.Empty;
-		public string ReturnType = string.Empty;
+        public TypeDef ReturnType = new TypeDef();
 		public string BriefOfReturn = string.Empty;
 		public bool ReturnIsEnum = false;
 		public string Note = null;
@@ -54,7 +104,7 @@ namespace CppWrapperGenerator
 
 	class ParameterDef
 	{
-		public string Type = string.Empty;
+        public TypeDef Type = new TypeDef();
 		public string CoreType = string.Empty;
 		public string Name = string.Empty;
 		public string Brief = string.Empty;

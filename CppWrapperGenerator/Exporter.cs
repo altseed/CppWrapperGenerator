@@ -22,12 +22,176 @@ namespace CppWrapperGenerator
         int lib_h_indent = 0;
         int lib_cpp_indent = 0;
 
+        List<Func<TypeDef, MethodDef, string>> dll_ret_rules = new List<Func<TypeDef, MethodDef, string>>();
+        List<Func<TypeDef, MethodDef, string>> dll_h_arg_rules = new List<Func<TypeDef, MethodDef, string>>();
+        List<Func<TypeDef, int, string, MethodDef, string>> dll_cpp_arg_rules = new List<Func<TypeDef, int, string, MethodDef, string>>();
+
+        List<Func<TypeDef, MethodDef, string>> lib_ret_rules = new List<Func<TypeDef, MethodDef, string>>();
+        List<Func<TypeDef, MethodDef, string>> lib_h_arg_rules = new List<Func<TypeDef, MethodDef, string>>();
+        List<Func<TypeDef, int, string, MethodDef, string>> lib_cpp_arg_rules = new List<Func<TypeDef, int, string, MethodDef, string>>();
+
         string dllClassName = "WrapperDLL";
+
+        string GetDLLRet(TypeDef t, MethodDef m)
+        {
+            foreach(var f in dll_ret_rules)
+            {
+                var r = f(t, m);
+                if (r != null) return r;
+            }
+            return "";
+        }
+
+        string GetDLLHArg(TypeDef t, MethodDef m)
+        {
+            foreach (var f in dll_h_arg_rules)
+            {
+                var r = f(t, m);
+                if (r != null) return r;
+            }
+            return "";
+        }
+
+        string GetDLLCppArg(TypeDef t, int i, string s, MethodDef m)
+        {
+            foreach (var f in dll_cpp_arg_rules)
+            {
+                var r = f(t, i, s, m);
+                if (r != null) return r;
+            }
+            return "";
+        }
+
+        string GetLIBRet(TypeDef t, MethodDef m)
+        {
+            foreach (var f in lib_ret_rules)
+            {
+                var r = f(t, m);
+                if (r != null) return r;
+            }
+            return "";
+        }
+
+        string GetLIBHArg(TypeDef t, MethodDef m)
+        {
+            foreach (var f in lib_h_arg_rules)
+            {
+                var r = f(t, m);
+                if (r != null) return r;
+            }
+            return "";
+        }
+
+        string GetLIBCppArg(TypeDef t, int i, string s, MethodDef m)
+        {
+            foreach (var f in lib_cpp_arg_rules)
+            {
+                var r = f(t, i, s, m);
+                if (r != null) return r;
+            }
+            return "";
+        }
 
         public Exporter(Settings settings, ParseResult doxygen)
 		{
 			this.settings = settings;
 			this.doxygen = doxygen;
+
+            foreach(var pt in BuildIn.PrimitiveType)
+            {
+                dll_ret_rules.Add(
+                    (t,m) => 
+                    {
+                        if (t.Name != pt) return null;
+                        return pt;
+                    }
+                );
+
+                dll_h_arg_rules.Add(
+                    (t, m) =>
+                    {
+                        if (t.Name != pt) return null;
+                        return pt;
+                    }
+                );
+
+                dll_cpp_arg_rules.Add(
+                    (t, i, s, m) =>
+                    {
+                        if (t.Name != pt) return null;
+                        return string.Format("auto arg{0} = {1};", i, s);
+                    }
+                );
+
+                lib_ret_rules.Add(
+                    (t, m) =>
+                    {
+                        if (t.Name != pt) return null;
+                        return pt;
+                    }
+                );
+
+                lib_h_arg_rules.Add(
+                    (t, m) =>
+                    {
+                        if (t.Name != pt) return null;
+                        return pt;
+                    }
+                );
+
+                lib_cpp_arg_rules.Add(
+                    (t, i, s, m) =>
+                    {
+                        if (t.Name != pt) return null;
+                        return string.Format("auto arg{0} = {1};", i, s);
+                    }
+                );
+            }
+
+            // Other rules
+            {
+                dll_ret_rules.Add(
+                    (t, m) =>
+                    {
+                        return "void*";
+                    }
+                );
+
+                dll_h_arg_rules.Add(
+                    (t, m) =>
+                    {
+                        return "void*";
+                    }
+                );
+
+                dll_cpp_arg_rules.Add(
+                    (t, i, s, m) =>
+                    {
+                        return string.Format("auto arg{0} = ({1}*){2};", i, t.Name, s);
+                    }
+                );
+
+                lib_ret_rules.Add(
+                    (t, m) =>
+                    {
+                        return t.Name + "*";
+                    }
+                );
+
+                lib_h_arg_rules.Add(
+                    (t, m) =>
+                    {
+                        return t.Name + "*";
+                    }
+                );
+
+                lib_cpp_arg_rules.Add(
+                    (t, i, s, m) =>
+                    {
+                        return string.Format("auto arg{0} = s->self;", i, s);
+                    }
+                );
+            }
 		}
 
 		public void Export()
@@ -69,6 +233,8 @@ namespace CppWrapperGenerator
 
             foreach (var c in doxygen.ClassDefs)
             {
+                if (!settings.ClassWhiteList.Any(_ => _ == c.Name)) continue;
+
                 var dllFuncPrefix = c.Name + "_";
 
                 AddLIBH("class " + c.Name + " {");
@@ -81,8 +247,14 @@ namespace CppWrapperGenerator
                     if (m.IsStatic) continue;
                     if (!m.IsPublic) continue;
 
-                    var isConstract = string.IsNullOrEmpty(m.ReturnType) && !m.Name.Contains("~");
-                    var isDestruct = string.IsNullOrEmpty(m.ReturnType) && m.Name.Contains("~");
+                    // A method which has an argument whose type is shared_ptr<T> is ignored.
+                    if (m.Parameters.Any(_ => _.Type.IsSharedPtr)) continue;
+
+                    // A method whose return type is shared_ptr<T> is ignored.
+                    if (m.ReturnType.IsSharedPtr) continue;
+
+                    var isConstract = string.IsNullOrEmpty(m.ReturnType.Name) && !m.Name.Contains("~");
+                    var isDestruct = string.IsNullOrEmpty(m.ReturnType.Name) && m.Name.Contains("~");
 
                     var methodName = m.Name;
                     var returnType = m.ReturnType;
@@ -92,22 +264,22 @@ namespace CppWrapperGenerator
                     if (isConstract)
                     {
                         methodName = "Construct";
-                        returnType = "void *";
+                        returnType.Name = "void *";
                     }
                     else if (isDestruct)
                     {
                         methodName = "Destruct";
-                        returnType = "void";
+                        returnType.Name = "void";
 
                         ParameterDef def = new ParameterDef();
-                        def.Type = "void *";
+                        def.Type.Name = "void *";
                         def.Name = "self";
                         dllParameters.Insert(0, def);
                     }
                     else
                     {
                         ParameterDef def = new ParameterDef();
-                        def.Type = "void *";
+                        def.Type.Name = "void *";
                         def.Name = "self";
                         dllParameters.Insert(0, def);
                     }
@@ -115,19 +287,25 @@ namespace CppWrapperGenerator
                     var dllFuncName = dllFuncPrefix + methodName;
 
                     // dll
-                    var dllFuncArg = "(" + string.Join(",", dllParameters.Select(_ => _.Type + " " + _.Name).ToArray()) + ")";
+                    var dllFuncArg = "(" + string.Join(",", dllParameters.Select((_,i) => GetDLLHArg(_.Type, m) + " " + _.Name).ToArray()) + ")";
 
                     // dll header
-                    AddDLLH("virtual " + returnType + " " + dllFuncName + dllFuncArg + ";");
+                    AddDLLH("virtual " + GetDLLRet(returnType, m) + " " + dllFuncName + dllFuncArg + ";");
 
                     // dll cpp
-                    AddDLLCPP(returnType + " " + dllClassName + "::" + dllFuncName + dllFuncArg + "{");
+                    AddDLLCPP(GetDLLRet(returnType, m) + " " + dllClassName + "::" + dllFuncName + dllFuncArg + "{");
 
                     PushDLLCppIndent();
 
                     if(isConstract)
                     {
-                        AddDLLCPP("return " + c.Name + "(" + string.Join(",", libParameters.Select(_ => _.Name).ToArray()) + ");");
+                        var argConverters = libParameters.Select((_, i) => GetDLLCppArg(_.Type, i, _.Name, m));
+                        foreach(var a in argConverters)
+                        {
+                            AddDLLCPP(a);
+                        }
+
+                        AddDLLCPP("return " + c.Name + "(" + string.Join(",", libParameters.Select((_, i) => "arg" + i).ToArray()) + ");");
                     }
                     else if(isDestruct)
                     {
@@ -138,13 +316,20 @@ namespace CppWrapperGenerator
                     {
                         AddDLLCPP("auto self_ = (" + c.Name + "*)self;");
 
-                        if (returnType == "void")
+                        var argConverters = libParameters.Select((_, i) => GetDLLCppArg(_.Type, i, _.Name, m));
+                        foreach (var a in argConverters)
+                        {
+                            AddDLLCPP(a);
+                        }
+
+                        if (returnType.Name == "void")
                         {
                             AddDLLCPP("self_->" + methodName + "(" + string.Join(",", libParameters.Select(_ => _.Name).ToArray()) + ");");
                         }
                         else
                         {
-                            AddDLLCPP("return self_->" + methodName + "(" + string.Join(",", libParameters.Select(_ => _.Name).ToArray()) + ");");
+                            AddDLLCPP("auto ret = self_->" + methodName + "(" + string.Join(",", libParameters.Select((_, i) => "arg" + i).ToArray()) + ");");
+                            AddDLLCPP("return ret;");
                         }
                     }
 
@@ -154,7 +339,7 @@ namespace CppWrapperGenerator
                     AddDLLCPP("");
 
                     // lib
-                    var libFuncArg = "(" + string.Join(",", libParameters.Select(_ => _.Type + " " + _.Name).ToArray()) + ")";
+                    var libFuncArg = "(" + string.Join(",", libParameters.Select(_ => GetLIBHArg(_.Type, m) + " " + _.Name).ToArray()) + ")";
 
                     // lib header
                     if (isConstract)
@@ -167,7 +352,7 @@ namespace CppWrapperGenerator
                     }
                     else
                     {
-                        AddLIBH(returnType + " " + methodName + libFuncArg + ";");
+                        AddLIBH(GetLIBRet(returnType, m) + " " + methodName + libFuncArg + ";");
                     }
 
                     // lib cpp
@@ -176,7 +361,13 @@ namespace CppWrapperGenerator
                         AddLIBCPP(c.Name + "::" + c.Name + libFuncArg + "{");
                         PushLIBCppIndent();
                         {
-                            AddLIBCPP("self = dll->" + dllFuncName + "(" + string.Join(",", dllParameters.Select(_ => _.Name).ToArray()) + ");");
+                            var argConverters = libParameters.Select((_, i) => GetLIBCppArg(_.Type, i, _.Name, m));
+                            foreach (var a in argConverters)
+                            {
+                                AddLIBCPP(a);
+                            }
+
+                            AddLIBCPP("self = dll->" + dllFuncName + "(" + string.Join(",", dllParameters.Select((_, i) => "arg" + i).ToArray()) + ");");
                         }
                         PopLIBCppIndent();
                         AddLIBCPP("};");
@@ -196,13 +387,19 @@ namespace CppWrapperGenerator
                         AddLIBCPP(returnType + " " + c.Name + "::" + methodName + libFuncArg + "{");
                         PushLIBCppIndent();
                         {
-                            if (returnType == "void")
+                            var argConverters = libParameters.Select((_, i) => GetLIBCppArg(_.Type, i, _.Name, m));
+                            foreach (var a in argConverters)
                             {
-                                AddLIBCPP("dll->" + dllFuncName + "(" + string.Join(",", dllParameters.Select(_ => _.Name).ToArray()) + ");");
+                                AddLIBCPP(a);
+                            }
+
+                            if (returnType.Name == "void")
+                            {
+                                AddLIBCPP("dll->" + dllFuncName + "(" + string.Join(",", dllParameters.Select((_, i) => "arg" + i).ToArray()) + ");");
                             }
                             else
                             {
-                                AddLIBCPP("return dll->" + dllFuncName + "(" + string.Join(",", dllParameters.Select(_ => _.Name).ToArray()) + ");");
+                                AddLIBCPP("return dll->" + dllFuncName + "(" + string.Join(",", dllParameters.Select((_, i) => "arg" + i).ToArray()) + ");");
                             }
                         }
                         PopLIBCppIndent();
