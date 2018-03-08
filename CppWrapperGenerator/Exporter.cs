@@ -167,28 +167,28 @@ namespace CppWrapperGenerator
                 dll_cpp_arg_rules.Add(
                     (t, i, s, m) =>
                     {
-                        return string.Format("auto arg{0} = ({1}*){2};", i, t.Name, s);
+                        return string.Format("auto arg{0} = ({1}){2};", i, t.Name, s);
                     }
                 );
 
                 lib_ret_rules.Add(
                     (t, m) =>
                     {
-                        return t.Name + "*";
+                        return string.Format("std::shared_ptr<{0}>", t.Name.Replace("*", "").Replace(" ",""));
                     }
                 );
 
                 lib_h_arg_rules.Add(
                     (t, m) =>
                     {
-                        return t.Name + "*";
+                        return string.Format("std::shared_ptr<{0}>", t.Name.Replace("*", "").Replace(" ", ""));
                     }
                 );
 
                 lib_cpp_arg_rules.Add(
                     (t, i, s, m) =>
                     {
-                        return string.Format("auto arg{0} = s->self;", i, s);
+                        return string.Format("auto arg{0} = {1}.get()->self;", i, s);
                     }
                 );
             }
@@ -240,6 +240,7 @@ namespace CppWrapperGenerator
                 AddLIBH("class " + c.Name + " {");
                 PushLIBHIndent();
                 AddLIBH("void* self = nullptr;");
+                AddLIBH("bool isCtrlSelf = false;");
                 AddLIBH("public:");
 
                 foreach (var m in c.Methods)
@@ -324,7 +325,7 @@ namespace CppWrapperGenerator
 
                         if (returnType.Name == "void")
                         {
-                            AddDLLCPP("self_->" + methodName + "(" + string.Join(",", libParameters.Select(_ => _.Name).ToArray()) + ");");
+                            AddDLLCPP("self_->" + methodName + "(" + string.Join(",", libParameters.Select((_, i) => "arg" + i).ToArray()) + ");");
                         }
                         else
                         {
@@ -361,13 +362,15 @@ namespace CppWrapperGenerator
                         AddLIBCPP(c.Name + "::" + c.Name + libFuncArg + "{");
                         PushLIBCppIndent();
                         {
-                            var argConverters = libParameters.Select((_, i) => GetLIBCppArg(_.Type, i, _.Name, m));
+                            AddLIBCPP("auto arg0 = self;");
+                            var argConverters = libParameters.Select((_, i) => GetLIBCppArg(_.Type, i + 1, _.Name, m));
                             foreach (var a in argConverters)
                             {
                                 AddLIBCPP(a);
                             }
 
                             AddLIBCPP("self = dll->" + dllFuncName + "(" + string.Join(",", dllParameters.Select((_, i) => "arg" + i).ToArray()) + ");");
+                            AddLIBCPP("isCtrlSelf = true;");
                         }
                         PopLIBCppIndent();
                         AddLIBCPP("};");
@@ -377,7 +380,11 @@ namespace CppWrapperGenerator
                         AddLIBCPP(c.Name + "::~" + c.Name + libFuncArg + "{");
                         PushLIBCppIndent();
                         {
+                            AddLIBCPP("if (isCtrlSelf) {");
+                            PushLIBCppIndent();
                             AddLIBCPP("dll->" + dllFuncName + "(" + string.Join(",", dllParameters.Select(_ => _.Name).ToArray()) + ");");
+                            PopLIBCppIndent();
+                            AddLIBCPP("}");
                         }
                         PopLIBCppIndent();
                         AddLIBCPP("};");
@@ -387,7 +394,8 @@ namespace CppWrapperGenerator
                         AddLIBCPP(returnType + " " + c.Name + "::" + methodName + libFuncArg + "{");
                         PushLIBCppIndent();
                         {
-                            var argConverters = libParameters.Select((_, i) => GetLIBCppArg(_.Type, i, _.Name, m));
+                            AddLIBCPP("auto arg0 = self;");
+                            var argConverters = libParameters.Select((_, i) => GetLIBCppArg(_.Type, i + 1, _.Name, m));
                             foreach (var a in argConverters)
                             {
                                 AddLIBCPP(a);
