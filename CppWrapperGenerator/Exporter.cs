@@ -148,8 +148,8 @@ namespace CppWrapperGenerator
                 );
             }
 
-            // Other rules
-            {
+			// Other rules
+			{
                 dll_ret_rules.Add(
                     (t, m) =>
                     {
@@ -197,7 +197,11 @@ namespace CppWrapperGenerator
 		public void Export()
 		{
             AddDLLH("#pragma once");
-            AddDLLH("");
+			AddDLLH("");
+			AddDLLH("#include <stdio.h>");
+			AddDLLH("#include <stdint.h>");
+			AddDLLH("");
+			AddDLLH("");
 
             AddDLLH("class " + dllClassName + " {");
             AddDLLH("public:");
@@ -207,7 +211,10 @@ namespace CppWrapperGenerator
 
             AddLIBH("#pragma once");
             AddLIBH("");
-            AddLIBH("asd {");
+			AddLIBH("#include <stdio.h>");
+			AddLIBH("#include <stdint.h>");
+			AddLIBH("");
+			AddLIBH("namespace asd {");
             AddLIBH("");
 
             AddLIBH("void InitializeWrapper();");
@@ -231,7 +238,16 @@ namespace CppWrapperGenerator
 
             PushDLLHIndent();
 
-            foreach (var c in doxygen.ClassDefs)
+			// predefined
+			foreach (var c in doxygen.ClassDefs)
+			{
+				if (!settings.ClassWhiteList.Any(_ => _ == c.Name)) continue;
+				AddLIBH("class " + c.Name + ";");
+			}
+
+			AddLIBH("");
+
+			foreach (var c in doxygen.ClassDefs)
             {
                 if (!settings.ClassWhiteList.Any(_ => _ == c.Name)) continue;
 
@@ -241,7 +257,18 @@ namespace CppWrapperGenerator
                 PushLIBHIndent();
                 AddLIBH("void* self = nullptr;");
                 AddLIBH("bool isCtrlSelf = false;");
-                AddLIBH("public:");
+
+				// Default constructor
+				if(!c.Methods.Any(m=> string.IsNullOrEmpty(m.ReturnType.Name) && !m.Name.Contains("~") && m.IsPublic))
+				{
+					AddLIBH(c.Name + "(void* self, bool isCtrlSelf);");
+					AddLIBCPP(c.Name + "::" + c.Name + "(void* self, bool isCtrlSelf) {");
+					AddLIBCPP("\tthis->self = self;");
+					AddLIBCPP("\tthis->isCtrlSelf = isCtrlSelf;");
+					AddLIBCPP("}");
+				}
+
+				AddLIBH("public:");
 
                 foreach (var m in c.Methods)
                 {
