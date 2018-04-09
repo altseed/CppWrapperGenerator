@@ -53,6 +53,8 @@ namespace CppWrapperGenerator
 
             Exporter exporter = new Exporter(settings, doxygenParser.Result);
 
+			exporter.ReleasableClasses = settings.ReleasableClassList;
+
             exporter.Export();
         }
     }

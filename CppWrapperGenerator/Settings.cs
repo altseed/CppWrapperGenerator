@@ -17,6 +17,6 @@ namespace CppWrapperGenerator
 		[DataMember]
 		public string[] ClassWhiteList { get; set; }
 		[DataMember]
-		public string[] MethodBlackList { get; set; }
+		public string[] ReleasableClassList { get; set; }
 	}
 }

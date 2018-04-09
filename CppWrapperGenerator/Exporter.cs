@@ -24,13 +24,19 @@ namespace CppWrapperGenerator
 
         List<Func<TypeDef, MethodDef, string>> dll_ret_rules = new List<Func<TypeDef, MethodDef, string>>();
         List<Func<TypeDef, MethodDef, string>> dll_h_arg_rules = new List<Func<TypeDef, MethodDef, string>>();
-        List<Func<TypeDef, int, string, MethodDef, string>> dll_cpp_arg_rules = new List<Func<TypeDef, int, string, MethodDef, string>>();
+		List<Func<TypeDef, MethodDef, string>> dll_cpp_ret_rules = new List<Func<TypeDef, MethodDef, string>>();
+		List<Func<TypeDef, int, string, MethodDef, string>> dll_cpp_arg_rules = new List<Func<TypeDef, int, string, MethodDef, string>>();
 
         List<Func<TypeDef, MethodDef, string>> lib_ret_rules = new List<Func<TypeDef, MethodDef, string>>();
         List<Func<TypeDef, MethodDef, string>> lib_h_arg_rules = new List<Func<TypeDef, MethodDef, string>>();
-        List<Func<TypeDef, int, string, MethodDef, string>> lib_cpp_arg_rules = new List<Func<TypeDef, int, string, MethodDef, string>>();
+		List<Func<TypeDef, MethodDef, string>> lib_cpp_ret_rules = new List<Func<TypeDef, MethodDef, string>>();
+		List<Func<TypeDef, int, string, MethodDef, string>> lib_cpp_arg_rules = new List<Func<TypeDef, int, string, MethodDef, string>>();
 
-        string dllClassName = "WrapperDLL";
+		List<Func<TypeDef, bool, string>> dll_destructor_rules = new List<Func<TypeDef, bool, string>>();
+
+		string dllClassName = "WrapperDLL";
+
+		public string[] ReleasableClasses = new string[0];
 
         string GetDLLRet(TypeDef t, MethodDef m)
         {
@@ -52,7 +58,17 @@ namespace CppWrapperGenerator
             return "";
         }
 
-        string GetDLLCppArg(TypeDef t, int i, string s, MethodDef m)
+		string GetDLLCppRet(TypeDef t, MethodDef m)
+		{
+			foreach (var f in dll_cpp_ret_rules)
+			{
+				var r = f(t, m);
+				if (r != null) return r;
+			}
+			return "";
+		}
+
+		string GetDLLCppArg(TypeDef t, int i, string s, MethodDef m)
         {
             foreach (var f in dll_cpp_arg_rules)
             {
@@ -82,7 +98,17 @@ namespace CppWrapperGenerator
             return "";
         }
 
-        string GetLIBCppArg(TypeDef t, int i, string s, MethodDef m)
+		string GetLIBCppRet(TypeDef t, MethodDef m)
+		{
+			foreach (var f in lib_cpp_ret_rules)
+			{
+				var r = f(t, m);
+				if (r != null) return r;
+			}
+			return "";
+		}
+
+		string GetLIBCppArg(TypeDef t, int i, string s, MethodDef m)
         {
             foreach (var f in lib_cpp_arg_rules)
             {
@@ -92,7 +118,17 @@ namespace CppWrapperGenerator
             return "";
         }
 
-        public Exporter(Settings settings, ParseResult doxygen)
+		string GetDLLDestructor(TypeDef t, bool isDestructorPrivate)
+		{
+			foreach (var f in dll_destructor_rules)
+			{
+				var r = f(t, isDestructorPrivate);
+				if (r != null) return r;
+			}
+			return "";
+		}
+
+		public Exporter(Settings settings, ParseResult doxygen)
 		{
 			this.settings = settings;
 			this.doxygen = doxygen;
@@ -103,7 +139,7 @@ namespace CppWrapperGenerator
                     (t,m) => 
                     {
                         if (t.Name != pt) return null;
-                        return pt;
+                        return t.ToString();
                     }
                 );
 
@@ -111,8 +147,8 @@ namespace CppWrapperGenerator
                     (t, m) =>
                     {
                         if (t.Name != pt) return null;
-                        return pt;
-                    }
+                        return t.ToString();
+					}
                 );
 
                 dll_cpp_arg_rules.Add(
@@ -127,16 +163,16 @@ namespace CppWrapperGenerator
                     (t, m) =>
                     {
                         if (t.Name != pt) return null;
-                        return pt;
-                    }
+                        return t.ToString();
+					}
                 );
 
                 lib_h_arg_rules.Add(
                     (t, m) =>
                     {
                         if (t.Name != pt) return null;
-                        return pt;
-                    }
+                        return t.ToString();
+					}
                 );
 
                 lib_cpp_arg_rules.Add(
@@ -147,6 +183,25 @@ namespace CppWrapperGenerator
                     }
                 );
             }
+
+			// Special create rules
+			{
+				lib_ret_rules.Add(
+					(t, m) =>
+					{
+						if (!m.Name.StartsWith("Create")) return null;
+						return string.Format("std::shared_ptr<{0}>", m.ReturnType.Name);
+					}
+				);
+
+				lib_cpp_ret_rules.Add(
+					(t, m) =>
+					{
+						if (!m.Name.StartsWith("Create")) return null;
+						return string.Format("return std::shared_ptr<{0}>( new {0}(ret, true) );", t.Name);
+					}
+				);
+			}
 
 			// Other rules
 			{
@@ -164,7 +219,14 @@ namespace CppWrapperGenerator
                     }
                 );
 
-                dll_cpp_arg_rules.Add(
+				dll_cpp_ret_rules.Add(
+					(t, m) =>
+					{
+						return string.Format("return ret;");
+					}
+				);
+
+				dll_cpp_arg_rules.Add(
                     (t, i, s, m) =>
                     {
                         return string.Format("auto arg{0} = ({1}){2};", i, t.Name, s);
@@ -185,13 +247,41 @@ namespace CppWrapperGenerator
                     }
                 );
 
-                lib_cpp_arg_rules.Add(
+				lib_cpp_ret_rules.Add(
+					(t, m) =>
+					{
+						return string.Format("return ret;");
+					}
+				);
+
+				lib_cpp_arg_rules.Add(
                     (t, i, s, m) =>
                     {
                         return string.Format("auto arg{0} = {1}.get()->self;", i, s);
                     }
                 );
-            }
+
+				dll_destructor_rules.Add(
+					(t, b) =>
+					{
+						// TODO : Generarize
+						if(ReleasableClasses.Contains(t.Name))
+						{
+							return "SafeRelease(self_);";
+						}
+
+						if(b)
+						{
+							return null;
+						}
+						else
+						{
+							return string.Format("delete self_;", t.Name);
+						}
+					}
+				);
+
+			}
 		}
 
 		public void Export()
@@ -223,7 +313,7 @@ namespace CppWrapperGenerator
 
             AddLIBCPP("#include \"asd.WrapperLib.h\"");
             AddLIBCPP("");
-            AddLIBCPP("asd {");
+            AddLIBCPP("namespace asd {");
             AddLIBCPP("");
             AddLIBCPP("static " + dllClassName + "* dll = nullptr;");
             AddLIBCPP("");
@@ -244,6 +334,7 @@ namespace CppWrapperGenerator
 				if (!settings.ClassWhiteList.Any(_ => _ == c.Name)) continue;
 				AddLIBH("class " + c.Name + ";");
 			}
+			AddLIBH("class AutoGeneratedWrapperAccessor;");
 
 			AddLIBH("");
 
@@ -253,13 +344,29 @@ namespace CppWrapperGenerator
 
                 var dllFuncPrefix = c.Name + "_";
 
-                AddLIBH("class " + c.Name + " {");
+
+				AddLIBH("/**");
+				AddLIBH("\t@brief " + c.Brief);
+				AddLIBH("*/");
+				AddLIBH("class " + c.Name + " {");
                 PushLIBHIndent();
                 AddLIBH("void* self = nullptr;");
                 AddLIBH("bool isCtrlSelf = false;");
 
+				// friend class
+				foreach(var m in c.Methods)
+				{
+					if(doxygen.ClassDefs.Any(_ => _.Name == m.ReturnType.Name))
+					{
+						AddLIBH("friend class " + m.ReturnType.Name + ";");
+					}
+				}
+
+
+				AddLIBH("friend class AutoGeneratedWrapperAccessor;");
+
 				// Default constructor
-				if(!c.Methods.Any(m=> string.IsNullOrEmpty(m.ReturnType.Name) && !m.Name.Contains("~") && m.IsPublic))
+				if (!c.Methods.Any(m=> string.IsNullOrEmpty(m.ReturnType.Name) && !m.Name.Contains("~") && m.IsPublic))
 				{
 					AddLIBH(c.Name + "(void* self, bool isCtrlSelf);");
 					AddLIBCPP(c.Name + "::" + c.Name + "(void* self, bool isCtrlSelf) {");
@@ -268,13 +375,14 @@ namespace CppWrapperGenerator
 					AddLIBCPP("}");
 				}
 
+				bool isDestructorPrivate = c.Methods.Any(_ => _.Name.Contains("~") && !_.IsPublic);
+
 				AddLIBH("public:");
 
                 foreach (var m in c.Methods)
                 {
                     if (m.IsStatic) continue;
-                    if (!m.IsPublic) continue;
-
+                    
                     // A method which has an argument whose type is shared_ptr<T> is ignored.
                     if (m.Parameters.Any(_ => _.Type.IsSharedPtr)) continue;
 
@@ -284,6 +392,9 @@ namespace CppWrapperGenerator
                     var isConstract = string.IsNullOrEmpty(m.ReturnType.Name) && !m.Name.Contains("~");
                     var isDestruct = string.IsNullOrEmpty(m.ReturnType.Name) && m.Name.Contains("~");
 
+					// non public functions are not valid without destructor
+					if (!isDestruct && !m.IsPublic) continue;
+					
                     var methodName = m.Name;
                     var returnType = m.ReturnType;
                     var libParameters = m.Parameters.ToArray().ToList();
@@ -338,8 +449,14 @@ namespace CppWrapperGenerator
                     else if(isDestruct)
                     {
                         AddDLLCPP("auto self_ = (" + c.Name + "*)self;");
-                        AddDLLCPP("delete self_;");
-                    }
+
+						var f = GetDLLDestructor(new TypeDef() { Name = c.Name }, !m.IsPublic);
+
+						if(f != "")
+						{
+							AddDLLCPP(f);
+						}
+					}
                     else
                     {
                         AddDLLCPP("auto self_ = (" + c.Name + "*)self;");
@@ -357,9 +474,9 @@ namespace CppWrapperGenerator
                         else
                         {
                             AddDLLCPP("auto ret = self_->" + methodName + "(" + string.Join(",", libParameters.Select((_, i) => "arg" + i).ToArray()) + ");");
-                            AddDLLCPP("return ret;");
-                        }
-                    }
+							AddDLLCPP(GetDLLCppRet(returnType, m));
+						}
+					}
 
                     PopDLLCppIndent();
 
@@ -369,8 +486,19 @@ namespace CppWrapperGenerator
                     // lib
                     var libFuncArg = "(" + string.Join(",", libParameters.Select(_ => GetLIBHArg(_.Type, m) + " " + _.Name).ToArray()) + ")";
 
-                    // lib header
-                    if (isConstract)
+					// lib header
+
+					AddLIBH("/**");
+					AddLIBH("\t@brief " + m.Brief);
+
+					foreach(var p in m.Parameters)
+					{
+						AddLIBH("\t@param " + p.Name + " " + p.Brief);
+					}
+
+					AddLIBH("*/");
+
+					if (isConstract)
                     {
                         AddLIBH(c.Name + libFuncArg + ";");
                     }
@@ -382,6 +510,7 @@ namespace CppWrapperGenerator
                     {
                         AddLIBH(GetLIBRet(returnType, m) + " " + methodName + libFuncArg + ";");
                     }
+					AddLIBH("");
 
                     // lib cpp
                     if (isConstract)
@@ -434,8 +563,9 @@ namespace CppWrapperGenerator
                             }
                             else
                             {
-                                AddLIBCPP("return dll->" + dllFuncName + "(" + string.Join(",", dllParameters.Select((_, i) => "arg" + i).ToArray()) + ");");
-                            }
+                                AddLIBCPP("auto ret = dll->" + dllFuncName + "(" + string.Join(",", dllParameters.Select((_, i) => "arg" + i).ToArray()) + ");");
+								AddLIBCPP(GetLIBCppRet(returnType, m));
+							}
                         }
                         PopLIBCppIndent();
                         AddLIBCPP("};");
@@ -448,6 +578,7 @@ namespace CppWrapperGenerator
                 AddLIBH("};");
                 AddLIBH("");
             }
+
 
             PopDLLHIndent();
 

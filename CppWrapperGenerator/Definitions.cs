@@ -15,6 +15,7 @@ namespace CppWrapperGenerator
             "void",
             "float",
             "bool",
+			"char16_t",
         };
     }
 
@@ -23,37 +24,80 @@ namespace CppWrapperGenerator
         public string Name = string.Empty;
         public bool IsSharedPtr = false;
         public bool IsPrimitiveType = false;
+		public bool IsConst = false;
+		public bool IsRef = false;
+		public bool IsPointer = false;
 
-        public void Parse(string original)
-        {
-            if(original.Contains("std::shared_ptr"))
-            {
-                IsSharedPtr = true;
-                Name = original.Replace("std::shared_ptr", "").Replace("<", "").Replace(">", "").Replace(" ", "");
-            }
-            else
-            {
-                Name = original;
-            }
+		public void Parse(string original)
+		{
+			if (original.Contains("std::shared_ptr"))
+			{
+				IsSharedPtr = true;
+				original = original.Replace("std::shared_ptr", "").Replace("<", "").Replace(">", "").Replace(" ", "");
+			}
 
-            foreach(var type in BuildIn.PrimitiveType)
-            {
-                if (original.Contains(type))
-                {
-                    IsPrimitiveType = true;
-                }
-            }
-        }
+			if(original.Contains("const"))
+			{
+				IsConst = true;
+				original = original.Replace("const", "");
+			}
 
-        public override string ToString()
-        {
-            if(IsSharedPtr)
-            {
-                return string.Format("std::shared_ptr<{0}>", Name);
-            }
+			if (original.Contains("*"))
+			{
+				IsPointer = true;
+				original = original.Replace("*", "");
+			}
 
-            return Name;
-        }
+			if (original.Contains("*"))
+			{
+				IsPointer = true;
+				original = original.Replace("*", "");
+			}
+
+			if (original.Contains("&"))
+			{
+				IsRef = true;
+				original = original.Replace("&", "");
+			}
+
+			original = original.Trim(' ');
+
+			Name = original;
+
+			foreach (var type in BuildIn.PrimitiveType)
+			{
+				if (Name.Contains(type))
+				{
+					IsPrimitiveType = true;
+				}
+			}
+		}
+
+		public override string ToString()
+		{
+			var ret = Name;
+			if (IsConst)
+			{
+				ret = string.Format("const {0}", ret);
+			}
+
+			if (IsPointer)
+			{
+				ret = string.Format("{0}*", ret);
+			}
+
+			if (IsRef)
+			{
+				ret = string.Format("{0}&", ret);
+			}
+
+			if (IsSharedPtr)
+			{
+				ret = string.Format("std::shared_ptr<{0}>", ret);
+			}
+
+			return ret;
+		}
     }
 
 	class EnumDef
