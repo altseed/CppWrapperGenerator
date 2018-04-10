@@ -130,7 +130,9 @@ namespace CppWrapperGenerator
 
             methodDef.IsPublic = funcNode.Attribute("prot").Value == "public";
 
-            var typeNode = funcNode.Element("type");
+			methodDef.IsConst = funcNode.Attribute("const").Value == "yes";
+
+			var typeNode = funcNode.Element("type");
             if (typeNode != null)
             {
                 methodDef.ReturnType.Parse(typeNode.Value);

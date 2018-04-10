@@ -132,6 +132,7 @@ namespace CppWrapperGenerator
 	{
 		public bool IsStatic = false;
         public bool IsPublic = false;
+		public bool IsConst = false;
 		public string Name = string.Empty;
 		public string Brief = string.Empty;
         public TypeDef ReturnType = new TypeDef();

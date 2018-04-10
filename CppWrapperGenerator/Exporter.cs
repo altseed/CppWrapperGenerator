@@ -16,11 +16,13 @@ namespace CppWrapperGenerator
         List<string> dll_cppText = new List<string>();
         List<string> lib_headerText = new List<string>();
         List<string> lib_cppText = new List<string>();
+		List<string> lib_internalHeaderText = new List<string>();
 
-        int dll_h_indent = 0;
+		int dll_h_indent = 0;
         int dll_cpp_indent = 0;
         int lib_h_indent = 0;
         int lib_cpp_indent = 0;
+		int lib_internal_h_indent = 0;
 
         List<Func<TypeDef, MethodDef, string>> dll_ret_rules = new List<Func<TypeDef, MethodDef, string>>();
         List<Func<TypeDef, MethodDef, string>> dll_h_arg_rules = new List<Func<TypeDef, MethodDef, string>>();
@@ -307,9 +309,16 @@ namespace CppWrapperGenerator
 			AddLIBH("namespace asd {");
             AddLIBH("");
 
-            AddLIBH("void InitializeWrapper();");
-            AddLIBH("void TerminateWrapper();");
-            AddLIBH("");
+			AddInternalLIBH("#pragma once");
+			AddInternalLIBH("");
+			AddInternalLIBH("#include <stdio.h>");
+			AddInternalLIBH("#include <stdint.h>");
+			AddInternalLIBH("");
+			AddInternalLIBH("namespace asd {");
+			AddInternalLIBH("");
+			AddInternalLIBH("void InitializeWrapper();");
+            AddInternalLIBH("void TerminateWrapper();");
+            AddInternalLIBH("");
 
             AddLIBCPP("#include \"asd.WrapperLib.h\"");
             AddLIBCPP("");
@@ -486,6 +495,11 @@ namespace CppWrapperGenerator
                     // lib
                     var libFuncArg = "(" + string.Join(",", libParameters.Select(_ => GetLIBHArg(_.Type, m) + " " + _.Name).ToArray()) + ")";
 
+					if(m.IsConst)
+					{
+						libFuncArg += " const";
+					}
+
 					// lib header
 
 					AddLIBH("/**");
@@ -494,6 +508,11 @@ namespace CppWrapperGenerator
 					foreach(var p in m.Parameters)
 					{
 						AddLIBH("\t@param " + p.Name + " " + p.Brief);
+					}
+
+					if(!string.IsNullOrEmpty(m.BriefOfReturn))
+					{
+						AddLIBH("\t@return " + m.BriefOfReturn);
 					}
 
 					AddLIBH("*/");
@@ -605,13 +624,15 @@ namespace CppWrapperGenerator
 
 
             AddLIBH("}");
-            AddLIBCPP("}");
+			AddInternalLIBH("}");
+			AddLIBCPP("}");
 
 
             System.IO.File.WriteAllLines("dll.h", dll_headerText.ToArray());
             System.IO.File.WriteAllLines("dll.cpp", dll_cppText.ToArray());
             System.IO.File.WriteAllLines("lib.h", lib_headerText.ToArray());
-            System.IO.File.WriteAllLines("lib.cpp", lib_cppText.ToArray());
+			System.IO.File.WriteAllLines("lib.internal.h", lib_internalHeaderText.ToArray());
+			System.IO.File.WriteAllLines("lib.cpp", lib_cppText.ToArray());
         }
 
         void AddDLLH(string str)
@@ -653,7 +674,20 @@ namespace CppWrapperGenerator
             lib_headerText.Add(s);
         }
 
-        void AddLIBCPP(string str)
+		void AddInternalLIBH(string str)
+		{
+			string s = string.Empty;
+			for (int i = 0; i < lib_internal_h_indent; i++)
+			{
+				s += "\t";
+			}
+
+			s += str;
+
+			lib_internalHeaderText.Add(s);
+		}
+
+		void AddLIBCPP(string str)
         {
             string s = string.Empty;
             for (int i = 0; i < lib_cpp_indent; i++)
@@ -678,5 +712,8 @@ namespace CppWrapperGenerator
         void PushLIBCppIndent() { lib_cpp_indent++; }
         void PopLIBCppIndent() { lib_cpp_indent--; }
 
-    }
+		void PushInternalLIBHIndent() { lib_internal_h_indent++; }
+		void PopInternalLIBHIndent() { lib_internal_h_indent--; }
+
+	}
 }
