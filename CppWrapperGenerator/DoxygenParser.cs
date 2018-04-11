@@ -154,7 +154,7 @@ namespace CppWrapperGenerator
                 foreach(var param in params_array)
                 {
                     var type = param.Element("type").Value;
-                    var declname = param.Element("declname").Value;
+                    var declname = param.Element("declname")?.Value ?? string.Empty;
                     argParams.Add(Tuple.Create(type, declname));
                 }
             }
