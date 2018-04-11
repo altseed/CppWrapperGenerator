@@ -293,6 +293,7 @@ namespace CppWrapperGenerator
 
 #include <stdio.h>
 #include <stdint.h>
+#include <memory>
 
 #include <asd.common.Base.h>
 
@@ -346,6 +347,7 @@ ASD_DLLEXPORT void ASD_STDCALL DeleteWrapperDLL(void* o)
 
 #include <stdio.h>
 #include <stdint.h>
+#include <memory>
 
 namespace asd {
 
