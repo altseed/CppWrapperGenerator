@@ -23,6 +23,7 @@ namespace CppWrapperGenerator
     {
         public string Name = string.Empty;
         public bool IsSharedPtr = false;
+		public bool IsVector = false;
         public bool IsPrimitiveType = false;
 		public bool IsConst = false;
 		public bool IsRef = false;
@@ -36,7 +37,7 @@ namespace CppWrapperGenerator
 				original = original.Replace("std::shared_ptr", "").Replace("<", "").Replace(">", "").Replace(" ", "");
 			}
 
-			if(original.Contains("const"))
+			if (original.Contains("const"))
 			{
 				IsConst = true;
 				original = original.Replace("const", "");
@@ -60,6 +61,12 @@ namespace CppWrapperGenerator
 				original = original.Replace("&", "");
 			}
 
+			if (original.Contains("std::vector"))
+			{
+				IsVector = true;
+				original = original.Replace("std::vector", "").Replace("<", "").Replace(">", "").Replace(" ", "");
+			}
+
 			original = original.Trim(' ');
 
 			Name = original;
@@ -76,6 +83,12 @@ namespace CppWrapperGenerator
 		public override string ToString()
 		{
 			var ret = Name;
+
+			if(IsVector)
+			{
+				ret = string.Format("std::vector<{0}>", ret);
+			}
+
 			if (IsConst)
 			{
 				ret = string.Format("const {0}", ret);
