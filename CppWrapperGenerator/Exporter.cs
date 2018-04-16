@@ -186,6 +186,122 @@ namespace CppWrapperGenerator
                 );
             }
 
+			// enum
+			{
+				dll_ret_rules.Add(
+					(t, m) =>
+					{
+						if (!doxygen.EnumDefs.Any(_=>_.Name == t.Name)) return null;
+						return t.ToString();
+					}
+				);
+
+				dll_h_arg_rules.Add(
+					(t, m) =>
+					{
+						if (!doxygen.EnumDefs.Any(_ => _.Name == t.Name)) return null;
+						return t.ToString();
+					}
+				);
+
+				dll_cpp_arg_rules.Add(
+					(t, i, s, m) =>
+					{
+						if (!doxygen.EnumDefs.Any(_ => _.Name == t.Name)) return null;
+						return string.Format("auto arg{0} = {1};", i, s);
+					}
+				);
+
+				lib_ret_rules.Add(
+					(t, m) =>
+					{
+						if (!doxygen.EnumDefs.Any(_ => _.Name == t.Name)) return null;
+						return t.ToString();
+					}
+				);
+
+				lib_h_arg_rules.Add(
+					(t, m) =>
+					{
+						if (!doxygen.EnumDefs.Any(_ => _.Name == t.Name)) return null;
+						return t.ToString();
+					}
+				);
+
+				lib_cpp_arg_rules.Add(
+					(t, i, s, m) =>
+					{
+						if (!doxygen.EnumDefs.Any(_ => _.Name == t.Name)) return null;
+						return string.Format("auto arg{0} = {1};", i, s);
+					}
+				);
+			}
+
+			// vector
+			{
+				dll_ret_rules.Add(
+					(t, m) =>
+					{
+						if (!t.IsVector) return null;
+						return t.ToString();
+					}
+				);
+
+				dll_h_arg_rules.Add(
+					(t, m) =>
+					{
+						if (!t.IsVector) return null;
+						return t.ToString();
+					}
+				);
+
+				dll_cpp_arg_rules.Add(
+					(t, i, s, m) =>
+					{
+						if (!t.IsVector) return null;
+						if(t.IsRef)
+						{
+							return string.Format("auto& arg{0} = {1};", i, s);
+						}
+						else
+						{
+							return string.Format("auto arg{0} = {1};", i, s);
+						}
+					}
+				);
+
+				lib_ret_rules.Add(
+					(t, m) =>
+					{
+						if (!t.IsVector) return null;
+						return t.ToString();
+					}
+				);
+
+				lib_h_arg_rules.Add(
+					(t, m) =>
+					{
+						if (!t.IsVector) return null;
+						return t.ToString();
+					}
+				);
+
+				lib_cpp_arg_rules.Add(
+					(t, i, s, m) =>
+					{
+						if (!t.IsVector) return null;
+						if(t.IsRef)
+						{
+							return string.Format("auto& arg{0} = {1};", i, s);
+						}
+						else
+						{
+							return string.Format("auto arg{0} = {1};", i, s);
+						}
+					}
+				);
+			}
+
 			// Special create rules
 			{
 				lib_ret_rules.Add(
@@ -294,6 +410,7 @@ namespace CppWrapperGenerator
 #include <stdio.h>
 #include <stdint.h>
 #include <memory>
+#include <vector>
 
 #include <asd.common.Base.h>
 
@@ -316,6 +433,10 @@ namespace asd
 
 #include ""Sound/asd.Sound.h""
 #include ""Sound/asd.SoundSource.h""
+
+#include ""IO/asd.File.h""
+#include ""IO/asd.StaticFile.h""
+#include ""IO/asd.StreamFile.h""
 
 namespace asd
 {
@@ -348,6 +469,7 @@ ASD_DLLEXPORT void ASD_STDCALL DeleteWrapperDLL(void* o)
 #include <stdio.h>
 #include <stdint.h>
 #include <memory>
+#include <vector>
 
 namespace asd {
 
@@ -443,15 +565,23 @@ void TerminateWrapper(DeleteWrapperDLLFunc func) {
                 foreach (var m in c.Methods)
                 {
                     if (m.IsStatic) continue;
-                    
+
+					var isConstract = string.IsNullOrEmpty(m.ReturnType.Name) && !m.Name.Contains("~");
+					var isDestruct = string.IsNullOrEmpty(m.ReturnType.Name) && m.Name.Contains("~");
+
+					// A method note is none
+					if (string.IsNullOrEmpty(m.Brief) && !isConstract && !isDestruct) continue;
+
+					// A method whose note has a #Ignore is ignored.
+					if (m.Note?.Contains("#Ignore") ?? false) continue;
+					   
                     // A method which has an argument whose type is shared_ptr<T> is ignored.
                     if (m.Parameters.Any(_ => _.Type.IsSharedPtr)) continue;
 
                     // A method whose return type is shared_ptr<T> is ignored.
                     if (m.ReturnType.IsSharedPtr) continue;
 
-                    var isConstract = string.IsNullOrEmpty(m.ReturnType.Name) && !m.Name.Contains("~");
-                    var isDestruct = string.IsNullOrEmpty(m.ReturnType.Name) && m.Name.Contains("~");
+
 
 					// non public functions are not valid without destructor
 					if (!isDestruct && !m.IsPublic) continue;
@@ -528,13 +658,16 @@ void TerminateWrapper(DeleteWrapperDLLFunc func) {
                             AddDLLCPP(a);
                         }
 
-                        if (returnType.Name == "void")
+                        if (returnType.Name == "void" && !returnType.IsPointer)
                         {
                             AddDLLCPP("self_->" + methodName + "(" + string.Join(",", libParameters.Select((_, i) => "arg" + i).ToArray()) + ");");
                         }
                         else
                         {
-                            AddDLLCPP("auto ret = self_->" + methodName + "(" + string.Join(",", libParameters.Select((_, i) => "arg" + i).ToArray()) + ");");
+							var retType = "auto";
+							if (returnType.IsRef) retType = "auto&";
+
+                            AddDLLCPP(retType + " ret = self_->" + methodName + "(" + string.Join(",", libParameters.Select((_, i) => "arg" + i).ToArray()) + ");");
 							AddDLLCPP(GetDLLCppRet(returnType, m));
 						}
 					}
@@ -628,13 +761,16 @@ void TerminateWrapper(DeleteWrapperDLLFunc func) {
                                 AddLIBCPP(a);
                             }
 
-                            if (returnType.Name == "void")
+                            if (returnType.Name == "void" && !returnType.IsPointer)
                             {
                                 AddLIBCPP("dll->" + dllFuncName + "(" + string.Join(",", dllParameters.Select((_, i) => "arg" + i).ToArray()) + ");");
                             }
                             else
                             {
-                                AddLIBCPP("auto ret = dll->" + dllFuncName + "(" + string.Join(",", dllParameters.Select((_, i) => "arg" + i).ToArray()) + ");");
+								var retType = "auto";
+								if (returnType.IsRef) retType = "auto&";
+
+								AddLIBCPP(retType + " ret = dll->" + dllFuncName + "(" + string.Join(",", dllParameters.Select((_, i) => "arg" + i).ToArray()) + ");");
 								AddLIBCPP(GetLIBCppRet(returnType, m));
 							}
                         }
