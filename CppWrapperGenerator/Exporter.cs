@@ -501,6 +501,20 @@ void TerminateWrapper(DeleteWrapperDLLFunc func) {
 };
 ";
 
+			string StreamFile_Additional = @"
+/**
+	@brief	指定したサイズ分、ファイルを読み込む。
+	@param	buffer	出力先
+	@param	size	読み込まれるサイズ
+*/
+void Read(std::vector<uint8_t>& buffer, int32_t size)
+{
+	auto result = Read(size);
+	buffer.resize(result);
+	memcpy(buffer.data(), GetTempBuffer(), result);
+}
+";
+
 			AddDLLH(dllH_Header);
 
             AddDLLH("class " + dllClassName + " {");
@@ -780,6 +794,11 @@ void TerminateWrapper(DeleteWrapperDLLFunc func) {
                     
                     AddLIBCPP("");
                 }
+
+				if(c.Name == "StreamFile")
+				{
+					AddLIBH(StreamFile_Additional);
+				}
 
                 PopLIBHIndent();
                 AddLIBH("};");
