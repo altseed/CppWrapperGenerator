@@ -437,6 +437,7 @@ namespace asd
 #include ""IO/asd.File.h""
 #include ""IO/asd.StaticFile.h""
 #include ""IO/asd.StreamFile.h""
+#include ""Tool/asd.Tool.h""
 
 namespace asd
 {
