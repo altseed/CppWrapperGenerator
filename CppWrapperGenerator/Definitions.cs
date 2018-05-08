@@ -16,6 +16,8 @@ namespace CppWrapperGenerator
             "float",
             "bool",
 			"char16_t",
+			"Vector2DF",
+			"int8_t",
         };
     }
 
