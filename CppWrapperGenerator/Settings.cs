@@ -12,13 +12,23 @@ namespace CppWrapperGenerator
 	{
 		[DataMember]
 		public string DoxygenXmlDirPath { get; set; }
-		[DataMember]
-		public string ExportFilePath { get; set; }
-		[DataMember]
-		public string[] ClassWhiteList { get; set; }
-		[DataMember]
+
+        [DataMember]
+		public string ExportDLLDirPath { get; set; }
+
+        [DataMember]
+        public string ExportLibDirPath { get; set; }
+
+        [DataMember]
+        public string[] ClassWhiteList { get; set; }
+
+        [DataMember]
 		public string[] ReleasableClassList { get; set; }
+
+        [DataMember]
+        public string[] UnwrappedClassList { get; set; }
+
 		[DataMember]
 		public string[] PrimitiveTypeList { get; set; }
-	}
+    }
 }

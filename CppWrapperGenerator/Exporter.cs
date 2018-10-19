@@ -40,6 +40,8 @@ namespace CppWrapperGenerator
 
 		public string[] ReleasableClasses = new string[0];
 
+        public string[] UnwrappedClasses = new string[0];
+
         string GetDLLRet(TypeDef t, MethodDef m)
         {
             foreach(var f in dll_ret_rules)
@@ -375,6 +377,10 @@ namespace CppWrapperGenerator
 				lib_cpp_arg_rules.Add(
                     (t, i, s, m) =>
                     {
+                        if(UnwrappedClasses.Contains(t.Name))
+                        {
+                            return string.Format("auto arg{0} = {1}.get();", i, s);
+                        }
                         return string.Format("auto arg{0} = {1}.get()->self;", i, s);
                     }
                 );
@@ -402,7 +408,7 @@ namespace CppWrapperGenerator
 			}
 		}
 
-		public void Export()
+		public void Export(string libDirPath, string dllDirPath)
 		{
 			string dllH_Header = @"
 #pragma once
@@ -413,6 +419,7 @@ namespace CppWrapperGenerator
 #include <vector>
 
 #include <asd.common.Base.h>
+#include ""asd.Core.Base.h""
 
 extern ""C""
 {
@@ -471,6 +478,8 @@ ASD_DLLEXPORT void ASD_STDCALL DeleteWrapperDLL(void* o)
 #include <stdint.h>
 #include <memory>
 #include <vector>
+
+#include ""asd.CoreToEngine.h""
 
 namespace asd {
 
@@ -816,11 +825,10 @@ void Read(std::vector<uint8_t>& buffer, int32_t size)
 			AddLIBH(libH_Footer);
 			AddLIBCPP(libCpp_Footer);
 			
-            System.IO.File.WriteAllLines("asd.WrapperDLL.h", dll_headerText.ToArray(), System.Text.Encoding.UTF8);
-            System.IO.File.WriteAllLines("asd.WrapperDLL.cpp", dll_cppText.ToArray(), System.Text.Encoding.UTF8);
-            System.IO.File.WriteAllLines("asd.WrapperLib.h", lib_headerText.ToArray(), System.Text.Encoding.UTF8);
-			//System.IO.File.WriteAllLines("lib.internal.h", lib_internalHeaderText.ToArray(), System.Text.Encoding.UTF8);
-			System.IO.File.WriteAllLines("asd.WrapperLib.cpp", lib_cppText.ToArray(), System.Text.Encoding.UTF8);
+            System.IO.File.WriteAllLines(dllDirPath + "asd.WrapperDLL.h", dll_headerText.ToArray(), System.Text.Encoding.UTF8);
+            System.IO.File.WriteAllLines(dllDirPath + "asd.WrapperDLL.cpp", dll_cppText.ToArray(), System.Text.Encoding.UTF8);
+            System.IO.File.WriteAllLines(libDirPath + "asd.WrapperLib.h", lib_headerText.ToArray(), System.Text.Encoding.UTF8);
+			System.IO.File.WriteAllLines(libDirPath + "asd.WrapperLib.cpp", lib_cppText.ToArray(), System.Text.Encoding.UTF8);
         }
 
         void AddDLLH(string str)
