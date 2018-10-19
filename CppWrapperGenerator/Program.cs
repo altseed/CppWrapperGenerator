@@ -31,7 +31,7 @@ namespace CppWrapperGenerator
 
 			var settingsDirectory = Path.GetDirectoryName(args[0]);
 
-			var doxygenParser = new DoxygenParser();
+			var doxygenParser = new DoxygenParser(settings);
 			try
 			{
 				doxygenParser.AddNamespaceFile(Path.Combine(settingsDirectory, settings.DoxygenXmlDirPath, "namespaceasd.xml"));

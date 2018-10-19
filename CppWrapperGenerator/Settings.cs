@@ -18,5 +18,7 @@ namespace CppWrapperGenerator
 		public string[] ClassWhiteList { get; set; }
 		[DataMember]
 		public string[] ReleasableClassList { get; set; }
+		[DataMember]
+		public string[] PrimitiveTypeList { get; set; }
 	}
 }

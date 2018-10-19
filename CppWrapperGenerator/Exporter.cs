@@ -135,7 +135,7 @@ namespace CppWrapperGenerator
 			this.settings = settings;
 			this.doxygen = doxygen;
 
-            foreach(var pt in BuildIn.PrimitiveType)
+            foreach(var pt in settings.PrimitiveTypeList)
             {
                 dll_ret_rules.Add(
                     (t,m) => 

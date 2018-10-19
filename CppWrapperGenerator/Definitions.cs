@@ -17,6 +17,7 @@ namespace CppWrapperGenerator
             "bool",
 			"char16_t",
 			"Vector2DF",
+			"Vector2DI",
 			"int8_t",
         };
     }
@@ -31,7 +32,7 @@ namespace CppWrapperGenerator
 		public bool IsRef = false;
 		public bool IsPointer = false;
 
-		public void Parse(string original)
+		public void Parse(Settings settings, string original)
 		{
 			if (original.Contains("std::shared_ptr"))
 			{
@@ -73,7 +74,7 @@ namespace CppWrapperGenerator
 
 			Name = original;
 
-			foreach (var type in BuildIn.PrimitiveType)
+			foreach (var type in settings.PrimitiveTypeList)
 			{
 				if (Name.Contains(type))
 				{

@@ -16,6 +16,13 @@ namespace CppWrapperGenerator
 		public List<EnumDef> EnumDefs = new List<EnumDef>();
 		public List<ClassDef> ClassDefs = new List<ClassDef>();
 
+		Settings settings = null;
+
+		public DoxygenParser(Settings settings)
+		{
+			this.settings = settings;
+		}
+
 		public ParseResult Result
 		{
 			get
@@ -135,7 +142,7 @@ namespace CppWrapperGenerator
 			var typeNode = funcNode.Element("type");
             if (typeNode != null)
             {
-                methodDef.ReturnType.Parse(typeNode.Value);
+                methodDef.ReturnType.Parse(settings, typeNode.Value);
             }
 
             var briefNode = funcNode.Element("briefdescription").Element("para");
@@ -198,7 +205,7 @@ namespace CppWrapperGenerator
 
             if(arg != null)
             {
-                def.Type.Parse(arg.Item1);
+                def.Type.Parse(settings, arg.Item1);
             }
 
             return def;
