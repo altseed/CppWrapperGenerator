@@ -30,5 +30,8 @@ namespace CppWrapperGenerator
 
 		[DataMember]
 		public string[] PrimitiveTypeList { get; set; }
-    }
+
+		[DataMember]
+		public string[] FriendClassList { get; set; }
+	}
 }
