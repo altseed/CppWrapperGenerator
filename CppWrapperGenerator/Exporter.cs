@@ -318,7 +318,7 @@ namespace CppWrapperGenerator
 					(t, m) =>
 					{
 						if (!m.Name.StartsWith("Create")) return null;
-						return string.Format("return std::shared_ptr<{0}>( new {0}(ret, true) );", t.Name);
+						return string.Format("return ret != nullptr ? std::shared_ptr<{0}>( new {0}(ret, true) ) : nullptr;", t.Name);
 					}
 				);
 			}
@@ -381,7 +381,7 @@ namespace CppWrapperGenerator
                         {
                             return string.Format("auto arg{0} = {1}.get();", i, s);
                         }
-                        return string.Format("auto arg{0} = {1}.get()->self;", i, s);
+                        return string.Format("auto arg{0} = {1}.get() != nullptr ? {1}.get()->self : nullptr;", i, s);
                     }
                 );
 
